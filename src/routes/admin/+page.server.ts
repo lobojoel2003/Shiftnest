@@ -6,10 +6,12 @@ import { openSwaps, recentSignups } from '#lib/server/signups.ts';
 import { countVolunteers } from '#lib/server/volunteers.ts';
 import { dayKey, zonedToUtc } from '#lib/time.ts';
 import type { PageServerLoad } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
 const DAY = 86_400_000;
 
-export const load: PageServerLoad = () => {
+export const load: PageServerLoad = ({ locals }) => {
+	requireCoordinator(locals);
 	const db = getDb();
 	const settings = getSettings(db);
 	const now = Date.now();

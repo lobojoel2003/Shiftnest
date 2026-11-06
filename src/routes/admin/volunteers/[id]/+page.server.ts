@@ -14,6 +14,7 @@ import {
 	updateVolunteer
 } from '#lib/server/volunteers.ts';
 import type { Actions, PageServerLoad } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
 function loadVolunteer(id: string) {
 	const v = getVolunteer(getDb(), Number(id));
@@ -21,7 +22,8 @@ function loadVolunteer(id: string) {
 	return v;
 }
 
-export const load: PageServerLoad = ({ params }) => {
+export const load: PageServerLoad = ({ params, locals }) => {
+	requireCoordinator(locals);
 	const db = getDb();
 	const v = loadVolunteer(params.id);
 	const settings = getSettings(db);
@@ -57,6 +59,7 @@ export const load: PageServerLoad = ({ params }) => {
 
 export const actions: Actions = {
 	update: async (event) => {
+		requireCoordinator(event.locals);
 		const db = getDb();
 		const v = loadVolunteer(event.params.id);
 		const data = await event.request.formData();
@@ -82,6 +85,7 @@ export const actions: Actions = {
 	},
 
 	sendLink: async (event) => {
+		requireCoordinator(event.locals);
 		const db = getDb();
 		const v = loadVolunteer(event.params.id);
 		sendPortalLink(db, v);
@@ -94,6 +98,7 @@ export const actions: Actions = {
 	},
 
 	rotate: async (event) => {
+		requireCoordinator(event.locals);
 		const v = loadVolunteer(event.params.id);
 		rotateVolunteerTokens(getDb(), v.id);
 		redirectWithFlash(
@@ -105,6 +110,7 @@ export const actions: Actions = {
 	},
 
 	delete: async (event) => {
+		requireCoordinator(event.locals);
 		const v = loadVolunteer(event.params.id);
 		deleteVolunteer(getDb(), v.id);
 		redirectWithFlash(

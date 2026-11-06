@@ -116,6 +116,8 @@ export const migrations: string[] = [
 		subject TEXT NOT NULL DEFAULT '',
 		body_text TEXT NOT NULL,
 		body_html TEXT,
+		private_text TEXT,
+		private_html TEXT,
 		kind TEXT NOT NULL DEFAULT 'other',
 		status TEXT NOT NULL DEFAULT 'pending'
 			CHECK (status IN ('pending', 'sent', 'failed', 'logged')),

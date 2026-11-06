@@ -2,10 +2,12 @@ import { getDb } from '#lib/server/db/index.ts';
 import { getSettings } from '#lib/server/settings.ts';
 import { listVolunteers } from '#lib/server/volunteers.ts';
 import type { PageServerLoad } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
 const PAGE_SIZE = 50;
 
-export const load: PageServerLoad = ({ url }) => {
+export const load: PageServerLoad = ({ url, locals }) => {
+	requireCoordinator(locals);
 	const db = getDb();
 	const q = url.searchParams.get('q')?.slice(0, 100) ?? '';
 	const page = Math.max(1, Number(url.searchParams.get('page')) || 1);

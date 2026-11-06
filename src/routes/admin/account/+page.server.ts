@@ -12,14 +12,17 @@ import {
 } from '#lib/server/users.ts';
 import { checkbox, isEmail, text } from '#lib/server/validation.ts';
 import type { Actions, PageServerLoad } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
 export const load: PageServerLoad = ({ locals }) => {
+	requireCoordinator(locals);
 	const u = getUser(getDb(), locals.user!.id)!;
 	return { account: { name: u.name, email: u.email, notify: u.notify === 1 } };
 };
 
 export const actions: Actions = {
 	profile: async (event) => {
+		requireCoordinator(event.locals);
 		const db = getDb();
 		const me = event.locals.user!;
 		const data = await event.request.formData();
@@ -38,6 +41,7 @@ export const actions: Actions = {
 	},
 
 	password: async (event) => {
+		requireCoordinator(event.locals);
 		const db = getDb();
 		const me = getUser(db, event.locals.user!.id)!;
 		const data = await event.request.formData();

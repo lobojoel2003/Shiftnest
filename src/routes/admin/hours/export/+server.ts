@@ -5,8 +5,10 @@ import { resolveRange } from '#lib/server/ranges.ts';
 import { getSettings } from '#lib/server/settings.ts';
 import { utcToZoned } from '#lib/time.ts';
 import type { RequestHandler } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
-export const GET: RequestHandler = ({ url }) => {
+export const GET: RequestHandler = ({ url, locals }) => {
+	requireCoordinator(locals);
 	const db = getDb();
 	const settings = getSettings(db);
 	const range = resolveRange(url, settings.timezone);

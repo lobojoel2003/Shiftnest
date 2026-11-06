@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import Icon from '#lib/components/Icon.svelte';
+	import { isSafePath } from '#lib/paths.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const next = $derived(page.url.searchParams.get('next') ?? '/');
+	const requested = $derived(page.url.searchParams.get('next'));
+	const next = $derived(isSafePath(requested) ? requested : '/');
 </script>
 
 <svelte:head>
@@ -24,9 +26,7 @@
 				<button class="btn btn-primary"
 					><Icon name="logout" size={16} /> Sign out on this device</button
 				>
-				<a class="btn btn-ghost" href={next.startsWith('/') && !next.startsWith('//') ? next : '/'}
-					>Cancel</a
-				>
+				<a class="btn btn-ghost" href={next}>Cancel</a>
 			</form>
 		{:else}
 			<h1 style="font-size: 1.4rem">You’re not signed in</h1>

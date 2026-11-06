@@ -31,6 +31,7 @@ import { findOrCreateVolunteer } from '#lib/server/volunteers.ts';
 import { utcToZoned } from '#lib/time.ts';
 import type { SignupStatus } from '#lib/types.ts';
 import type { Actions, PageServerLoad } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
 function loadShift(id: string) {
 	const shift = getShift(getDb(), Number(id));
@@ -38,7 +39,8 @@ function loadShift(id: string) {
 	return shift;
 }
 
-export const load: PageServerLoad = ({ params }) => {
+export const load: PageServerLoad = ({ params, locals }) => {
+	requireCoordinator(locals);
 	const db = getDb();
 	const shift = loadShift(params.id);
 	const tz = getSettings(db).timezone;
@@ -106,6 +108,7 @@ export const load: PageServerLoad = ({ params }) => {
 
 export const actions: Actions = {
 	attendance: async (event) => {
+		requireCoordinator(event.locals);
 		const shift = loadShift(event.params.id);
 		const data = await event.request.formData();
 		const status = text(data, 'status', 20) as Exclude<SignupStatus, 'cancelled'>;
@@ -122,6 +125,7 @@ export const actions: Actions = {
 	},
 
 	markAllAttended: async (event) => {
+		requireCoordinator(event.locals);
 		const db = getDb();
 		const shift = loadShift(event.params.id);
 		let n = 0;
@@ -140,6 +144,7 @@ export const actions: Actions = {
 	},
 
 	remove: async (event) => {
+		requireCoordinator(event.locals);
 		const db = getDb();
 		const shift = loadShift(event.params.id);
 		const data = await event.request.formData();
@@ -159,6 +164,7 @@ export const actions: Actions = {
 	},
 
 	add: async (event) => {
+		requireCoordinator(event.locals);
 		const db = getDb();
 		const shift = loadShift(event.params.id);
 		const settings = getSettings(db);
@@ -202,6 +208,7 @@ export const actions: Actions = {
 	},
 
 	update: async (event) => {
+		requireCoordinator(event.locals);
 		const db = getDb();
 		const shift = loadShift(event.params.id);
 		const settings = getSettings(db);
@@ -232,6 +239,7 @@ export const actions: Actions = {
 	},
 
 	delete: async (event) => {
+		requireCoordinator(event.locals);
 		const db = getDb();
 		const shift = loadShift(event.params.id);
 		const affected =

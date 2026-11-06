@@ -12,6 +12,8 @@
 import http from 'node:http';
 import process from 'node:process';
 
+process.env.NODE_ENV ??= 'production';
+
 // adapter-node reads these when its handler module loads.
 process.env.PROTOCOL_HEADER = 'x-shiftnest-proto';
 process.env.HOST_HEADER = 'x-shiftnest-host';

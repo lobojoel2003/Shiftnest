@@ -2,10 +2,12 @@ import { config } from '#lib/server/config.ts';
 import { getDb } from '#lib/server/db/index.ts';
 import { listOutbox, type OutboxStatus } from '#lib/server/outbox.ts';
 import type { PageServerLoad } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
 const PAGE_SIZE = 50;
 
-export const load: PageServerLoad = ({ url }) => {
+export const load: PageServerLoad = ({ url, locals }) => {
+	requireCoordinator(locals);
 	const raw = url.searchParams.get('status') ?? 'all';
 	const status = (['all', 'pending', 'sent', 'failed', 'logged'].includes(raw) ? raw : 'all') as
 		OutboxStatus | 'all';

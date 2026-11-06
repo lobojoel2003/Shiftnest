@@ -14,6 +14,7 @@ import {
 import { int, isEmail, text } from '#lib/server/validation.ts';
 import type { Role } from '#lib/types.ts';
 import type { Actions, PageServerLoad } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
 const INVITE_TTL = 7 * 86_400_000;
 
@@ -22,7 +23,8 @@ function requireOwner(locals: App.Locals) {
 	return locals.user;
 }
 
-export const load: PageServerLoad = () => {
+export const load: PageServerLoad = ({ locals }) => {
+	requireCoordinator(locals);
 	return {
 		members: listUsers(getDb()).map((u) => ({
 			id: u.id,
@@ -37,6 +39,7 @@ export const load: PageServerLoad = () => {
 
 export const actions: Actions = {
 	invite: async (event) => {
+		requireCoordinator(event.locals);
 		const owner = requireOwner(event.locals);
 		const db = getDb();
 		const data = await event.request.formData();
@@ -58,6 +61,7 @@ export const actions: Actions = {
 	},
 
 	resend: async (event) => {
+		requireCoordinator(event.locals);
 		const owner = requireOwner(event.locals);
 		const db = getDb();
 		const user = getUser(db, int(await event.request.formData(), 'userId') ?? 0);
@@ -68,6 +72,7 @@ export const actions: Actions = {
 	},
 
 	role: async (event) => {
+		requireCoordinator(event.locals);
 		const owner = requireOwner(event.locals);
 		const db = getDb();
 		const data = await event.request.formData();
@@ -79,6 +84,7 @@ export const actions: Actions = {
 	},
 
 	remove: async (event) => {
+		requireCoordinator(event.locals);
 		const owner = requireOwner(event.locals);
 		const db = getDb();
 		const userId = int(await event.request.formData(), 'userId') ?? 0;

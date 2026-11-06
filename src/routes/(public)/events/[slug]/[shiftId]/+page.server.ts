@@ -2,7 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { config } from '#lib/server/config.ts';
 import { getDb } from '#lib/server/db/index.ts';
 import { redirectWithFlash } from '#lib/server/flash.ts';
-import { notifySignupConfirmed } from '#lib/server/notifications.ts';
+import { notifySignupConfirmed, sendPortalLink } from '#lib/server/notifications.ts';
 import { isSpam, readPerson, resolveVolunteer } from '#lib/server/people.ts';
 import { rateLimit } from '#lib/server/rate-limit.ts';
 import { getSettings } from '#lib/server/settings.ts';
@@ -79,11 +79,20 @@ export const actions: Actions = {
 
 		const { volunteer, signedIn } = resolveVolunteer(db, event, values, phone);
 
+		const notSignedInMessage = `You’re signed up! We emailed ${maskEmail(volunteer.email)} a confirmation with a link to manage your shifts.`;
 		let signupId: number;
 		try {
 			signupId = signUp(db, { shiftId: shift.id, volunteerId: volunteer.id, note: values.note });
 		} catch (err) {
-			if (err instanceof AppError) return fail(409, { values, error: err.message, code: err.code });
+			if (err instanceof AppError) {
+				// Don't confirm to an anonymous visitor that this email is already on the shift.
+				// Answer as if it worked and send the email's owner their personal link.
+				if (err.code === 'duplicate' && !signedIn) {
+					sendPortalLink(db, volunteer, settings);
+					redirectWithFlash(event, `/events/${shift.event_slug}`, 'success', notSignedInMessage);
+				}
+				return fail(409, { values, error: err.message, code: err.code });
+			}
 			throw err;
 		}
 		const detail = getSignupDetail(db, signupId)!;
@@ -97,11 +106,6 @@ export const actions: Actions = {
 				`You’re signed up for ${shift.role}! A confirmation is on its way to ${volunteer.email}.`
 			);
 		}
-		redirectWithFlash(
-			event,
-			`/events/${shift.event_slug}`,
-			'success',
-			`You’re signed up! We emailed ${maskEmail(volunteer.email)} a confirmation with a link to manage your shifts.`
-		);
+		redirectWithFlash(event, `/events/${shift.event_slug}`, 'success', notSignedInMessage);
 	}
 };

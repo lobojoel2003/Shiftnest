@@ -2,8 +2,10 @@ import { getDb } from '#lib/server/db/index.ts';
 import { listEvents } from '#lib/server/events.ts';
 import type { EventStatus } from '#lib/types.ts';
 import type { PageServerLoad } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
-export const load: PageServerLoad = ({ url }) => {
+export const load: PageServerLoad = ({ url, locals }) => {
+	requireCoordinator(locals);
 	const raw = url.searchParams.get('status') ?? 'active';
 	const status = (
 		['all', 'published', 'draft', 'archived', 'active'].includes(raw) ? raw : 'active'

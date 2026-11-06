@@ -235,7 +235,7 @@ export const actions: Actions = {
 
 	signout: async (event) => {
 		const data = await event.request.formData();
-		endSession(getDb(), event.cookies, VOLUNTEER_COOKIE);
+		endSession(getDb(), event.cookies, event.url, VOLUNTEER_COOKIE);
 		redirect(303, safeRedirectPath(text(data, 'next', 300), '/'));
 	}
 };

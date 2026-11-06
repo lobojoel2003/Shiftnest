@@ -16,10 +16,15 @@ export function setFlash({ cookies, url }: Ctx, type: Flash['type'], message: st
 	});
 }
 
-export function readFlash(cookies: Cookies): Flash | null {
+export function readFlash({ cookies, url }: Ctx): Flash | null {
 	const raw = cookies.get(COOKIE);
 	if (!raw) return null;
-	cookies.delete(COOKIE, { path: '/' });
+	cookies.delete(COOKIE, {
+		path: '/',
+		httpOnly: true,
+		sameSite: 'lax',
+		secure: url.protocol === 'https:'
+	});
 	try {
 		const parsed = JSON.parse(raw) as Flash;
 		if (typeof parsed.message === 'string' && ['success', 'error', 'info'].includes(parsed.type)) {

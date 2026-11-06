@@ -1,3 +1,5 @@
+import { isSafePath } from '../paths';
+
 /** Small, dependency-free helpers for reading and validating form posts. */
 
 /** An error whose message is safe to show to the person who caused it. */
@@ -96,8 +98,5 @@ export function maskEmail(email: string): string {
 
 /** Only allow same-site relative redirects (no protocol-relative or absolute URLs). */
 export function safeRedirectPath(value: string | null | undefined, fallback = '/'): string {
-	if (!value || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) {
-		return fallback;
-	}
-	return value;
+	return isSafePath(value) ? value : fallback;
 }

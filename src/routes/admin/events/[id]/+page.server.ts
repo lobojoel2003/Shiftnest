@@ -11,6 +11,7 @@ import { AppError, text } from '#lib/server/validation.ts';
 import { addDays, dayKey, utcToZoned } from '#lib/time.ts';
 import type { EventStatus } from '#lib/types.ts';
 import type { Actions, PageServerLoad } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
 function loadEvent(id: string) {
 	const event = getEvent(getDb(), Number(id));
@@ -18,7 +19,8 @@ function loadEvent(id: string) {
 	return event;
 }
 
-export const load: PageServerLoad = ({ params, url }) => {
+export const load: PageServerLoad = ({ params, url, locals }) => {
+	requireCoordinator(locals);
 	const db = getDb();
 	const event = loadEvent(params.id);
 	const settings = getSettings(db);
@@ -65,6 +67,7 @@ export const load: PageServerLoad = ({ params, url }) => {
 
 export const actions: Actions = {
 	update: async (event) => {
+		requireCoordinator(event.locals);
 		const current = loadEvent(event.params.id);
 		const { values, errors } = readEventForm(await event.request.formData());
 		if (Object.keys(errors).length) return fail(400, { eventForm: { values, errors } });
@@ -73,6 +76,7 @@ export const actions: Actions = {
 	},
 
 	status: async (event) => {
+		requireCoordinator(event.locals);
 		const current = loadEvent(event.params.id);
 		const status = text(await event.request.formData(), 'status', 20) as EventStatus;
 		if (!['draft', 'published', 'archived'].includes(status)) return fail(400);
@@ -87,6 +91,7 @@ export const actions: Actions = {
 	},
 
 	addShifts: async (event) => {
+		requireCoordinator(event.locals);
 		const db = getDb();
 		const current = loadEvent(event.params.id);
 		const settings = getSettings(db);
@@ -111,6 +116,7 @@ export const actions: Actions = {
 	},
 
 	delete: async (event) => {
+		requireCoordinator(event.locals);
 		const db = getDb();
 		const current = loadEvent(event.params.id);
 		const affected = upcomingSignupsForEvent(db, current.id);

@@ -114,3 +114,32 @@ describe('processOutbox', () => {
 		);
 	});
 });
+
+describe('private links in the message log', () => {
+	it('stores a redacted copy and drops the private one after delivery', async () => {
+		const db = testDb();
+		const { queueEmail } = await import('./outbox');
+		queueEmail(
+			db,
+			{
+				to: 'a@example.com',
+				subject: 'Link',
+				text: 'Open http://x.org/v/SECRETTOKEN123',
+				kind: 'portal_link'
+			},
+			NOW
+		);
+		const row = () =>
+			db.prepare('SELECT body_text, private_text FROM outbox').get() as {
+				body_text: string;
+				private_text: string | null;
+			};
+		expect(row().body_text).toBe('Open [private link hidden]');
+		expect(row().private_text).toContain('SECRETTOKEN123');
+
+		const delivered: string[] = [];
+		await processOutbox(db, { email: async (m) => void delivered.push(m.text), sms: null }, NOW);
+		expect(delivered[0]).toContain('SECRETTOKEN123');
+		expect(row().private_text).toBeNull();
+	});
+});

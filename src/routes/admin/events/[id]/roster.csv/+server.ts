@@ -7,8 +7,10 @@ import { listShiftsForEvent } from '#lib/server/shifts.ts';
 import { rosterForShift } from '#lib/server/signups.ts';
 import { utcToZoned } from '#lib/time.ts';
 import type { RequestHandler } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
-export const GET: RequestHandler = ({ params }) => {
+export const GET: RequestHandler = ({ params, locals }) => {
+	requireCoordinator(locals);
 	const db = getDb();
 	const event = getEvent(db, Number(params.id));
 	if (!event) error(404, 'Event not found');

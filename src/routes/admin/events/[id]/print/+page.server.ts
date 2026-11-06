@@ -4,8 +4,10 @@ import { getEvent } from '#lib/server/events.ts';
 import { listShiftsForEvent } from '#lib/server/shifts.ts';
 import { activeSignupsForShift } from '#lib/server/signups.ts';
 import type { PageServerLoad } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
-export const load: PageServerLoad = ({ params }) => {
+export const load: PageServerLoad = ({ params, locals }) => {
+	requireCoordinator(locals);
 	const db = getDb();
 	const event = getEvent(db, Number(params.id));
 	if (!event) error(404, 'Event not found');

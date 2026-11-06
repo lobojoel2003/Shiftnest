@@ -70,15 +70,22 @@ export function getVolunteerSession(
 	return row ?? null;
 }
 
-export function cookieOptions(url: URL, maxAgeMs: number) {
+/**
+ * Path and flags shared by setting and deleting our cookies. Self-hosters often
+ * run plain HTTP on a LAN, so cookies are only `Secure` on HTTPS. Deletions must
+ * use the same flags, or browsers ignore them.
+ */
+export function cookieScope(url: URL) {
 	return {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax' as const,
-		// Self-hosters often run plain HTTP on a LAN; only mark secure when we're on HTTPS.
-		secure: url.protocol === 'https:',
-		maxAge: Math.floor(maxAgeMs / 1000)
+		secure: url.protocol === 'https:'
 	};
+}
+
+export function cookieOptions(url: URL, maxAgeMs: number) {
+	return { ...cookieScope(url), maxAge: Math.floor(maxAgeMs / 1000) };
 }
 
 export function startUserSession(db: DB, cookies: Cookies, url: URL, userId: number): void {
@@ -98,8 +105,8 @@ export function startVolunteerSession(
 	cookies.set(VOLUNTEER_COOKIE, token, cookieOptions(url, VOLUNTEER_SESSION_TTL));
 }
 
-export function endSession(db: DB, cookies: Cookies, name: string): void {
+export function endSession(db: DB, cookies: Cookies, url: URL, name: string): void {
 	const token = cookies.get(name);
 	if (token) deleteSession(db, token);
-	cookies.delete(name, { path: '/' });
+	cookies.delete(name, cookieScope(url));
 }

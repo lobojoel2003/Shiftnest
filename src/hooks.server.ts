@@ -1,9 +1,11 @@
 import type { Handle, HandleServerError, ServerInit } from '@sveltejs/kit/hooks';
-import { building } from '$app/env';
+import { building, dev } from '$app/env';
 import { config, learnOrigin } from '#lib/server/config.ts';
 import { closeDb, getDb } from '#lib/server/db/index.ts';
 import { seedDemo } from '#lib/server/demo.ts';
+import { isAdminRequest, routedPath } from '#lib/server/guards.ts';
 import {
+	cookieScope,
 	getUserSession,
 	getVolunteerSession,
 	USER_COOKIE,
@@ -38,7 +40,8 @@ function redirectTo(location: string): Response {
 export const handle: Handle = async ({ event, resolve }) => {
 	const db = getDb();
 	const { cookies, url } = event;
-	learnOrigin(url.origin);
+	// Only the Vite dev server guesses its own address; production uses ORIGIN.
+	if (dev) learnOrigin(url.origin);
 
 	event.locals.user = null;
 	event.locals.volunteer = null;
@@ -46,12 +49,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const userToken = cookies.get(USER_COOKIE);
 	if (userToken) {
 		event.locals.user = getUserSession(db, userToken);
-		if (!event.locals.user) cookies.delete(USER_COOKIE, { path: '/' });
+		if (!event.locals.user) cookies.delete(USER_COOKIE, cookieScope(url));
 	}
 	const volunteerToken = cookies.get(VOLUNTEER_COOKIE);
 	if (volunteerToken) {
 		event.locals.volunteer = getVolunteerSession(db, volunteerToken);
-		if (!event.locals.volunteer) cookies.delete(VOLUNTEER_COOKIE, { path: '/' });
+		if (!event.locals.volunteer) cookies.delete(VOLUNTEER_COOKIE, cookieScope(url));
 	}
 
 	if (!setupComplete) {
@@ -59,7 +62,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		if (!setupComplete && !allowedBeforeSetup(url.pathname)) return redirectTo('/setup');
 	}
 
-	const isAdmin = url.pathname === '/admin' || url.pathname.startsWith('/admin/');
+	const isAdmin = isAdminRequest(event.route.id, url.pathname);
 	if (isAdmin && !event.locals.user) {
 		if (event.request.method === 'GET' || event.request.method === 'HEAD') {
 			return redirectTo(`/login?next=${encodeURIComponent(url.pathname + url.search)}`);
@@ -76,7 +79,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 		response.headers.set('x-content-type-options', 'nosniff');
 		response.headers.set('referrer-policy', 'strict-origin-when-cross-origin');
 		response.headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()');
-		if (isAdmin || event.locals.volunteer || /^\/(my|v|swap)(\/|$)/.test(url.pathname)) {
+		const path = routedPath(url.pathname) ?? url.pathname;
+		if (isAdmin || event.locals.volunteer || /^\/(my|v|swap)(\/|$)/.test(path)) {
 			response.headers.set('cache-control', 'private, no-store');
 		}
 	} catch {

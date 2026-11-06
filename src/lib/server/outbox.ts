@@ -16,8 +16,12 @@ export interface OutboxRow {
 	channel: Channel;
 	recipient: string;
 	subject: string;
+	/** What coordinators see in the message log: private links are hidden. */
 	body_text: string;
 	body_html: string | null;
+	/** The real message, kept only until it's delivered. */
+	private_text: string | null;
+	private_html: string | null;
 	kind: string;
 	status: OutboxStatus;
 	attempts: number;
@@ -56,26 +60,81 @@ export function onQueued(fn: (() => void) | null): void {
 	kick = fn;
 }
 
-export function queueEmail(db: DB, msg: EmailMessage, now = Date.now()): number {
+/**
+ * Links that act as keys (a volunteer's personal page, password resets and
+ * invitations). Coordinators must not be able to read them in the message log.
+ */
+const PRIVATE_LINK = /https?:\/\/[^\s"'<>]+?\/(?:v|reset|invite)\/[A-Za-z0-9_-]{8,}/g;
+export const HIDDEN_LINK = '[private link hidden]';
+
+export function redactPrivateLinks(text: string): string {
+	return text.replace(PRIVATE_LINK, HIDDEN_LINK);
+}
+
+function insert(
+	db: DB,
+	row: {
+		channel: Channel;
+		to: string;
+		subject: string;
+		text: string;
+		html: string | null;
+		kind: string;
+	},
+	now: number
+): number {
+	const text = redactPrivateLinks(row.text);
+	const html = row.html === null ? null : redactPrivateLinks(row.html);
+	const isPrivate = text !== row.text || html !== row.html;
 	const info = db
 		.prepare(
-			`INSERT INTO outbox (channel, recipient, subject, body_text, body_html, kind, send_after, created_at)
-			 VALUES ('email', ?, ?, ?, ?, ?, ?, ?)`
+			`INSERT INTO outbox (channel, recipient, subject, body_text, body_html, private_text, private_html, kind, send_after, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		)
-		.run(msg.to, msg.subject, msg.text, msg.html ?? null, msg.kind, now, now);
+		.run(
+			row.channel,
+			row.to,
+			row.subject,
+			text,
+			html,
+			isPrivate ? row.text : null,
+			isPrivate ? row.html : null,
+			row.kind,
+			now,
+			now
+		);
 	kick?.();
 	return Number(info.lastInsertRowid);
 }
 
+export function queueEmail(db: DB, msg: EmailMessage, now = Date.now()): number {
+	return insert(
+		db,
+		{
+			channel: 'email',
+			to: msg.to,
+			subject: msg.subject,
+			text: msg.text,
+			html: msg.html ?? null,
+			kind: msg.kind
+		},
+		now
+	);
+}
+
 export function queueSms(db: DB, msg: SmsMessage, now = Date.now()): number {
-	const info = db
-		.prepare(
-			`INSERT INTO outbox (channel, recipient, subject, body_text, kind, send_after, created_at)
-			 VALUES ('sms', ?, '', ?, ?, ?, ?)`
-		)
-		.run(msg.to, msg.text.slice(0, 640), msg.kind, now, now);
-	kick?.();
-	return Number(info.lastInsertRowid);
+	return insert(
+		db,
+		{
+			channel: 'sms',
+			to: msg.to,
+			subject: '',
+			text: msg.text.slice(0, 640),
+			html: null,
+			kind: msg.kind
+		},
+		now
+	);
 }
 
 // --- Transports ------------------------------------------------------------------------
@@ -147,8 +206,9 @@ function logToConsole(row: OutboxRow): void {
 		return;
 	}
 	const header = row.channel === 'email' ? `${row.subject}` : 'SMS';
+	// Development only: show the real links so you can click through.
 	console.info(
-		`\n[shiftnest] ✉  ${row.channel.toUpperCase()} to ${row.recipient} — ${header}\n${row.body_text}\n`
+		`\n[shiftnest] ✉  ${row.channel.toUpperCase()} to ${row.recipient} — ${header}\n${row.private_text ?? row.body_text}\n`
 	);
 }
 
@@ -165,25 +225,26 @@ export async function processOutbox(
 		)
 		.all(now, limit) as OutboxRow[];
 	for (const row of due) {
-		const send = row.channel === 'email' ? t.email : t.sms;
-		if (!send) {
+		const text = row.private_text ?? row.body_text;
+		const html = row.private_html ?? row.body_html;
+		if (row.channel === 'email' ? !t.email : !t.sms) {
 			logToConsole(row);
-			db.prepare(`UPDATE outbox SET status = 'logged', sent_at = ? WHERE id = ?`).run(now, row.id);
+			db.prepare(
+				`UPDATE outbox SET status = 'logged', sent_at = ?, private_text = NULL, private_html = NULL WHERE id = ?`
+			).run(now, row.id);
 			continue;
 		}
 		try {
 			if (row.channel === 'email') {
-				await t.email!({
-					to: row.recipient,
-					subject: row.subject,
-					text: row.body_text,
-					html: row.body_html ?? undefined
-				});
+				await t.email!({ to: row.recipient, subject: row.subject, text, html: html ?? undefined });
 			} else {
-				await t.sms!({ to: row.recipient, text: row.body_text });
+				await t.sms!({ to: row.recipient, text });
 			}
+			// Once delivered, the private copy is no longer needed.
 			db.prepare(
-				`UPDATE outbox SET status = 'sent', sent_at = ?, attempts = attempts + 1, last_error = NULL WHERE id = ?`
+				`UPDATE outbox SET status = 'sent', sent_at = ?, attempts = attempts + 1, last_error = NULL,
+					private_text = NULL, private_html = NULL
+				 WHERE id = ?`
 			).run(Date.now(), row.id);
 		} catch (err) {
 			const attempts = row.attempts + 1;

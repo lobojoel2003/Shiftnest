@@ -4,8 +4,10 @@ import { getSettings } from '#lib/server/settings.ts';
 import { listVolunteers } from '#lib/server/volunteers.ts';
 import { utcToZoned } from '#lib/time.ts';
 import type { RequestHandler } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
-export const GET: RequestHandler = () => {
+export const GET: RequestHandler = ({ locals }) => {
+	requireCoordinator(locals);
 	const db = getDb();
 	const settings = getSettings(db);
 	const { items } = listVolunteers(db, {

@@ -3,7 +3,7 @@ import { readFlash } from '#lib/server/flash.ts';
 import { getSettings } from '#lib/server/settings.ts';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = ({ locals, cookies }) => {
+export const load: LayoutServerLoad = ({ locals, cookies, url }) => {
 	const settings = getSettings(getDb());
 	return {
 		org: {
@@ -15,6 +15,6 @@ export const load: LayoutServerLoad = ({ locals, cookies }) => {
 		},
 		user: locals.user,
 		volunteer: locals.volunteer,
-		flash: readFlash(cookies)
+		flash: readFlash({ cookies, url })
 	};
 };

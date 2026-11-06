@@ -7,6 +7,7 @@ import { listShiftsForEvent } from '#lib/server/shifts.ts';
 import { activeSignupsForShift, upcomingSignupsForEvent } from '#lib/server/signups.ts';
 import { int, longText, text } from '#lib/server/validation.ts';
 import type { Actions, PageServerLoad } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
 function audience(eventId: number, shiftId: number | null) {
 	const db = getDb();
@@ -24,7 +25,8 @@ function audience(eventId: number, shiftId: number | null) {
 	return [...seen.values()];
 }
 
-export const load: PageServerLoad = ({ params, url }) => {
+export const load: PageServerLoad = ({ params, url, locals }) => {
+	requireCoordinator(locals);
 	const db = getDb();
 	const event = getEvent(db, Number(params.id));
 	if (!event) error(404, 'Event not found');
@@ -45,6 +47,7 @@ export const load: PageServerLoad = ({ params, url }) => {
 
 export const actions: Actions = {
 	default: async (event) => {
+		requireCoordinator(event.locals);
 		const db = getDb();
 		const ev = getEvent(db, Number(event.params.id));
 		if (!ev) error(404, 'Event not found');

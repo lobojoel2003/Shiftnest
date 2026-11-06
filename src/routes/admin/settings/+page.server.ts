@@ -9,6 +9,7 @@ import { checkbox, int, isEmail, text } from '#lib/server/validation.ts';
 import { isValidLocale, isValidTimeZone, timeZones } from '#lib/time.ts';
 import { BUILD } from '#lib/version.ts';
 import type { Actions, PageServerLoad } from './$types';
+import { requireCoordinator } from '#lib/server/guards.ts';
 
 const LOCALES = [
 	['en-US', 'English (US): 9:00 AM, Nov 14'],
@@ -29,7 +30,8 @@ const LOCALES = [
 	['sv-SE', 'Svenska']
 ] as const;
 
-export const load: PageServerLoad = () => {
+export const load: PageServerLoad = ({ locals }) => {
+	requireCoordinator(locals);
 	const cfg = config();
 	return {
 		settings: getSettings(getDb()),
@@ -49,6 +51,7 @@ export const load: PageServerLoad = () => {
 
 export const actions: Actions = {
 	save: async (event) => {
+		requireCoordinator(event.locals);
 		const data = await event.request.formData();
 		const errors: Record<string, string> = {};
 		const orgName = text(data, 'orgName', 100);
@@ -92,6 +95,7 @@ export const actions: Actions = {
 	},
 
 	testEmail: async (event) => {
+		requireCoordinator(event.locals);
 		const user = event.locals.user!;
 		if (!rateLimit(`test-email:${user.id}`, 5, 10 * 60_000)) {
 			return fail(429, { testError: 'Please wait a few minutes before sending another test.' });

@@ -1,0 +1,7 @@
+# Volunteer sign-up pages are public, but personal and admin pages are not.
+User-agent: *
+Disallow: /admin
+Disallow: /my
+Disallow: /v/
+Disallow: /swap/
+Disallow: /ical/

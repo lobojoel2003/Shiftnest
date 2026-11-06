@@ -1,0 +1,18 @@
+{
+	"extends": "$app/tsconfig",
+	"compilerOptions": {
+		"strict": true,
+		"noUncheckedIndexedAccess": false,
+		"noImplicitOverride": true,
+		"types": ["$app/types", "node"]
+	},
+	"exclude": ["build", "test-results", "playwright-report"],
+	"include": [
+		"src",
+		"tests",
+		"vite.config.ts",
+		"prettier.config.js",
+		"eslint.config.js",
+		"playwright.config.ts"
+	]
+}

@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 4173;
-const E2E_DB = 'test-results/e2e-db/shiftnest.db';
+const E2E_DB = '.e2e-data/shiftnest.db';
 
 export default defineConfig({
 	testDir: 'tests/e2e',
@@ -20,7 +20,17 @@ export default defineConfig({
 			: undefined
 	},
 	projects: [
-		{ name: 'desktop', use: { ...devices['Desktop Chrome'] }, testIgnore: '**/mobile.e2e.ts' },
+		{
+			name: 'desktop',
+			use: { ...devices['Desktop Chrome'] },
+			testIgnore: ['**/mobile.e2e.ts', '**/a11y.e2e.ts']
+		},
+		{
+			name: 'accessibility',
+			use: { ...devices['Desktop Chrome'] },
+			testMatch: '**/a11y.e2e.ts',
+			dependencies: ['desktop']
+		},
 		{
 			name: 'mobile',
 			use: { ...devices['Pixel 7'] },

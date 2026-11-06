@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-const dbPath = process.env.DATABASE_PATH ?? 'test-results/e2e-db/shiftnest.db';
+const dbPath = process.env.DATABASE_PATH ?? '.e2e-data/shiftnest.db';
 rmSync(dirname(dbPath), { recursive: true, force: true });
 mkdirSync(dirname(dbPath), { recursive: true });
 

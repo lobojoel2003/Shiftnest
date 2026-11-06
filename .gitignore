@@ -34,3 +34,6 @@ vite.config.ts.timestamp-*
 # Editors
 .idea
 *.swp
+
+# End-to-end test database
+/.e2e-data

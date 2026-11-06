@@ -6,7 +6,7 @@ export const ADMIN = {
 	email: 'alex@example.org',
 	password: 'correct-horse-battery'
 };
-const DB_PATH = 'test-results/e2e-db/shiftnest.db';
+const DB_PATH = '.e2e-data/shiftnest.db';
 
 /** Read the newest queued message for a recipient straight from the database. */
 export function lastMessage(to: string, kind?: string): { subject: string; body_text: string } {

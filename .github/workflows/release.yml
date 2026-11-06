@@ -1,11 +1,17 @@
 name: Release
 
-# Publishing a release:
-#   1. Move the "Unreleased" notes in CHANGELOG.md under a new version heading.
-#   2. npm version <major|minor|patch> -m "chore(release): v%s"
-#   3. git push --follow-tags
-# Pushing the vX.Y.Z tag runs this workflow, which verifies the code, builds the
-# release bundle and multi-arch Docker image, and publishes the GitHub Release.
+# Two ways to publish a release (first update CHANGELOG.md and the version):
+#
+#   A. From your machine:
+#        npm version <major|minor|patch>     # bumps package.json, commits, tags vX.Y.Z
+#        git push --follow-tags
+#
+#   B. From GitHub: Actions → Release → Run workflow, and enter the version
+#      (e.g. v1.2.0). The workflow tags the selected branch for you.
+#
+# Either way this workflow checks the tag, package.json and CHANGELOG.md agree,
+# runs the full test suite, builds the release bundle and the multi-arch Docker
+# image, and publishes the GitHub Release.
 
 on:
   push:
@@ -13,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to (re)publish, e.g. v1.0.0
+        description: Version to release, e.g. v1.0.0. Tags the selected branch if the tag doesn't exist yet.
         required: true
         type: string
 
@@ -29,10 +35,13 @@ env:
   NODE_VERSION: 24
 
 jobs:
-  verify:
-    name: Verify ${{ inputs.tag || github.ref_name }}
+  prepare:
+    name: Prepare ${{ inputs.tag || github.ref_name }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 5
+    # Runs no third-party code, so it can safely hold write access to create the tag.
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
@@ -40,18 +49,31 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ env.TAG }}
-      - uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - name: Check the tag matches package.json and CHANGELOG.md
+          fetch-depth: 0
+      - name: Use the existing tag, or tag the selected branch
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$TAG' is not a version tag like v1.2.3"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/$TAG" > /dev/null; then
+            git checkout -q "$TAG"
+            echo "Using existing tag $TAG"
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            git config user.name "$GITHUB_ACTOR"
+            git config user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+            echo "TAG_TO_CREATE=$TAG" >> "$GITHUB_ENV"
+          else
+            echo "::error::Tag $TAG not found"
+            exit 1
+          fi
+      - name: Check the version matches package.json and CHANGELOG.md
         id: version
         run: |
           VERSION="${TAG#v}"
           PKG="$(node -p "require('./package.json').version")"
           if [ "$VERSION" != "$PKG" ]; then
-            echo "::error::Tag $TAG does not match package.json version $PKG"
+            echo "::error::$TAG does not match package.json version $PKG"
             exit 1
           fi
           if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
@@ -61,6 +83,26 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [[ "$VERSION" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Create the tag
+        if: env.TAG_TO_CREATE != ''
+        run: |
+          git tag -a "$TAG" -m "Shiftnest $TAG"
+          git push origin "refs/tags/$TAG"
+          echo "Created $TAG at $(git rev-parse --short HEAD)"
+
+  verify:
+    name: Test ${{ inputs.tag || github.ref_name }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
       - run: npm ci
       - run: npm run lint
       - run: npm run check
@@ -71,7 +113,7 @@ jobs:
 
   bundle:
     name: Build release bundle
-    needs: verify
+    needs: [prepare, verify]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -79,7 +121,7 @@ jobs:
       id-token: write
       attestations: write
     env:
-      VERSION: ${{ needs.verify.outputs.version }}
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -95,7 +137,7 @@ jobs:
           BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" npm run build
         env:
           BUILD_NUMBER: ${{ github.run_number }}
-          GIT_SHA: ${{ needs.verify.outputs.sha }}
+          GIT_SHA: ${{ needs.prepare.outputs.sha }}
       - name: Package
         run: |
           npm prune --omit=dev --ignore-scripts
@@ -106,7 +148,7 @@ jobs:
           {
             "version": "${VERSION}",
             "build": "${{ github.run_number }}",
-            "commit": "${{ needs.verify.outputs.sha }}",
+            "commit": "${{ needs.prepare.outputs.sha }}",
             "date": "${BUILD_DATE}",
             "node": ">=22.17"
           }
@@ -132,7 +174,7 @@ jobs:
 
   docker:
     name: Publish Docker image
-    needs: verify
+    needs: [prepare, verify]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -141,7 +183,7 @@ jobs:
       id-token: write
       attestations: write
     env:
-      VERSION: ${{ needs.verify.outputs.version }}
+      VERSION: ${{ needs.prepare.outputs.version }}
     outputs:
       image: ${{ steps.image.outputs.name }}
       digest: ${{ steps.push.outputs.digest }}
@@ -164,11 +206,11 @@ jobs:
         with:
           images: ${{ steps.image.outputs.name }}
           flavor: |
-            latest=${{ needs.verify.outputs.prerelease == 'false' }}
+            latest=${{ needs.prepare.outputs.prerelease == 'false' }}
           tags: |
             type=semver,pattern={{version}},value=${{ env.TAG }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ env.TAG }},enable=${{ needs.verify.outputs.prerelease == 'false' }}
-            type=semver,pattern={{major}},value=${{ env.TAG }},enable=${{ needs.verify.outputs.prerelease == 'false' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.TAG }},enable=${{ needs.prepare.outputs.prerelease == 'false' }}
+            type=semver,pattern={{major}},value=${{ env.TAG }},enable=${{ needs.prepare.outputs.prerelease == 'false' }}
             type=raw,value=build-${{ github.run_number }}
           labels: |
             org.opencontainers.image.title=Shiftnest
@@ -185,7 +227,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BUILD_NUMBER=${{ github.run_number }}
-            GIT_SHA=${{ needs.verify.outputs.sha }}
+            GIT_SHA=${{ needs.prepare.outputs.sha }}
             VERSION=${{ env.VERSION }}
             BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
           provenance: mode=max
@@ -201,13 +243,13 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: [verify, bundle, docker]
+    needs: [prepare, verify, bundle, docker]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
     env:
-      VERSION: ${{ needs.verify.outputs.version }}
+      VERSION: ${{ needs.prepare.outputs.version }}
       IMAGE: ${{ needs.docker.outputs.image }}
     steps:
       - uses: actions/checkout@v7
@@ -244,7 +286,7 @@ jobs:
             echo "|---|---|"
             echo "| Version | \`${VERSION}\` |"
             echo "| Build number | \`${{ github.run_number }}\` |"
-            SHA="${{ needs.verify.outputs.sha }}"
+            SHA="${{ needs.prepare.outputs.sha }}"
             echo "| Commit | \`${SHA::7}\` |"
             echo "| Image | \`${IMAGE}:${VERSION}\` |"
             echo "| Image digest | \`${{ needs.docker.outputs.digest }}\` |"
@@ -257,7 +299,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           FLAGS=()
-          if [ "${{ needs.verify.outputs.prerelease }}" = "true" ]; then FLAGS+=(--prerelease); else FLAGS+=(--latest); fi
+          if [ "${{ needs.prepare.outputs.prerelease }}" = "true" ]; then FLAGS+=(--prerelease); else FLAGS+=(--latest); fi
           if gh release view "$TAG" > /dev/null 2>&1; then
             gh release edit "$TAG" --title "Shiftnest v${VERSION}" --notes-file notes.md "${FLAGS[@]}"
             gh release upload "$TAG" release/* --clobber

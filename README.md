@@ -244,11 +244,10 @@ $ curl https://volunteer.example.org/api/health
 {"status":"ok","version":"1.0.0","build":"12","commit":"8c1e0f2…","builtAt":"2026-11-06T05:12:00Z","uptimeSeconds":3600,"database":"ok"}
 ```
 
-To cut a release, maintainers:
+To cut a release, maintainers first move the notes under **Unreleased** in [`CHANGELOG.md`](CHANGELOG.md) to a new version heading, then either:
 
-1. Move the notes under **Unreleased** in [`CHANGELOG.md`](CHANGELOG.md) to a new version heading.
-2. Run `npm version minor` (or `patch` / `major`). This bumps `package.json`, commits `chore(release): vX.Y.Z` and creates the `vX.Y.Z` tag.
-3. Run `git push --follow-tags`.
+- **From a terminal:** run `npm version minor` (or `patch` / `major`), which bumps `package.json`, commits `chore(release): vX.Y.Z` and creates the `vX.Y.Z` tag, then `git push --follow-tags`; or
+- **From GitHub:** bump the version in `package.json`, push to `main`, then open **Actions → Release → Run workflow** and enter the version (for example `v1.1.0`). The workflow creates the tag for you.
 
 The [release workflow](.github/workflows/release.yml) then checks that the tag, `package.json` and changelog agree, runs the full test suite, builds the Node bundle and the multi-arch Docker image, attaches signed build provenance, and publishes the GitHub Release with notes from the changelog.
 

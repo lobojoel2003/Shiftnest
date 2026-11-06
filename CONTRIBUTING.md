@@ -40,4 +40,4 @@ CI runs the same checks. For UI changes, add screenshots to the pull request (an
 
 ## Releases
 
-Maintainers release by updating `CHANGELOG.md`, running `npm version <patch|minor|major>` and `git push --follow-tags`. The release workflow does the rest; see the README’s “Versioning and releases” section.
+Maintainers release by updating `CHANGELOG.md`, then either running `npm version <patch|minor|major>` and `git push --follow-tags`, or bumping `package.json` on `main` and using **Actions → Release → Run workflow**. The release workflow does the rest; see the README’s “Versioning and releases” section.

@@ -113,10 +113,10 @@
 		padding: 22px 0 28px;
 	}
 	.site-footer a {
-		text-decoration: none;
+		text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
 	}
 	.site-footer a:hover {
-		text-decoration: underline;
+		text-decoration-color: currentColor;
 	}
 	@media (max-width: 560px) {
 		.hide-sm {

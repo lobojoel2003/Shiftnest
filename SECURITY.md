@@ -21,6 +21,8 @@ Include what you found, how to reproduce it, and the version (from `/api/health`
 
 - Coordinator passwords are hashed with scrypt; sessions and one-time links are stored only as SHA-256 hashes.
 - Volunteer links and calendar feeds use 192-bit random tokens and can be rotated at any time.
+- Personal, password-reset and invitation links are hidden in the admin message log; the full message is kept only until it’s delivered.
+- Every coordinator page, form action and download checks the signed-in session on its own, in addition to a route-level guard.
 - Form submissions are protected against CSRF by origin checks; cookies are `HttpOnly` and `SameSite=Lax` (and `Secure` over HTTPS).
 - A strict Content Security Policy blocks third-party scripts; there are no external requests from the browser.
 - Logins, sign-ups and link requests are rate limited; public forms include a spam honeypot.

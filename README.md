@@ -272,15 +272,15 @@ npm install
 SHIFTNEST_DEMO=true npm run dev     # http://localhost:5173 with sample data
 ```
 
-| Command                             | What it does                                                            |
-| ----------------------------------- | ----------------------------------------------------------------------- |
-| `npm run dev`                       | Development server with hot reload. Emails are printed to the terminal. |
-| `npm run check`                     | Type-check Svelte and TypeScript.                                       |
-| `npm run lint` / `npm run format`   | Check / fix formatting and lint rules.                                  |
-| `npm test`                          | Unit tests (Vitest), using an in-memory database.                       |
-| `npm run build && npm run test:e2e` | End-to-end tests (Playwright) against the production build.             |
-| `npm run build && npm start`        | Run the production build locally.                                       |
-| `npm run screenshots`               | Regenerate the README images from the demo data.                        |
+| Command                             | What it does                                                                                                                      |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                       | Development server with hot reload. Emails are printed to the terminal.                                                           |
+| `npm run check`                     | Type-check Svelte and TypeScript.                                                                                                 |
+| `npm run lint` / `npm run format`   | Check / fix formatting and lint rules.                                                                                            |
+| `npm test`                          | Unit tests (Vitest), using an in-memory database.                                                                                 |
+| `npm run build && npm run test:e2e` | End-to-end and accessibility tests (Playwright + axe) against the production build, with a local SMTP server catching the emails. |
+| `npm run build && npm start`        | Run the production build locally.                                                                                                 |
+| `npm run screenshots`               | Regenerate the README images from the demo data.                                                                                  |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 
@@ -289,6 +289,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 - Volunteers’ details are only visible to your coordinators. Public pages show first names and initials only on cover requests.
 - Personal links and calendar feeds use long random tokens. Volunteers (and coordinators) can reset them at any time, which signs out every device.
 - Coordinators can delete a volunteer and all their history, for example when someone asks to be forgotten.
+- The message log never shows personal, password-reset or invitation links, so coordinators can’t use them to act as someone else.
 - No analytics, no third-party scripts or CDNs, no ads. Pages use your device’s own fonts and bundled icons.
 
 Found a vulnerability? Please report it privately; see [SECURITY.md](SECURITY.md).

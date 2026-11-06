@@ -61,12 +61,16 @@ remind people, handle swaps and count hours, without ads or monthly fees.
 - Background worker for reminders and an outbox with retries and back-off.
 - Security: scrypt password hashing, hashed session tokens, CSRF protection, strict
   Content Security Policy, rate limiting, honeypot spam protection, formula-safe CSV.
+  Every coordinator page, action and download checks the session itself, personal,
+  reset and invite links are hidden from the message log, and public forms never
+  reveal who has signed up.
 - Demo mode (`SHIFTNEST_DEMO=true`) with a realistic food bank to explore.
 - `/api/health` endpoint with version, build number and commit.
 - Multi-arch Docker image (amd64, arm64) running as a non-root user, with a health
   check, SBOM and signed build provenance.
-- CI on every push (lint, type-check, unit tests on Node 22 and 24, end-to-end tests,
-  Docker smoke test, CodeQL) and automated releases from version tags.
+- CI on every push (lint, type-check, unit tests on Node 22 and 24, end-to-end tests
+  with real SMTP delivery, automated WCAG 2.1 AA accessibility checks, Docker smoke
+  test, CodeQL) and automated releases from version tags.
 
 [Unreleased]: https://github.com/lobojoel2003/Shiftnest/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/lobojoel2003/Shiftnest/releases/tag/v1.0.0

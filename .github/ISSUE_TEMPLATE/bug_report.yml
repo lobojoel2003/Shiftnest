@@ -1,0 +1,50 @@
+name: Bug report
+description: Something isn’t working the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report this! Please don’t include volunteers’ personal details.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to …
+        2. Click …
+        3. See …
+  - type: input
+    id: version
+    attributes:
+      label: Shiftnest version
+      description: Shown at the bottom of the admin sidebar, or in /api/health.
+      placeholder: v1.0.0 (build 12)
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run Shiftnest?
+      options:
+        - Docker / Docker Compose
+        - Node.js release bundle
+        - From source
+        - Other
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: Safari on iPhone 15, Firefox on Windows…
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server logs
+      description: Anything printed by the server around the time of the problem.
+      render: text

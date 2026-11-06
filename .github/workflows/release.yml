@@ -1,0 +1,266 @@
+name: Release
+
+# Publishing a release:
+#   1. Move the "Unreleased" notes in CHANGELOG.md under a new version heading.
+#   2. npm version <major|minor|patch> -m "chore(release): v%s"
+#   3. git push --follow-tags
+# Pushing the vX.Y.Z tag runs this workflow, which verifies the code, builds the
+# release bundle and multi-arch Docker image, and publishes the GitHub Release.
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to (re)publish, e.g. v1.0.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+  NODE_VERSION: 24
+
+jobs:
+  verify:
+    name: Verify ${{ inputs.tag || github.ref_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      sha: ${{ steps.version.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Check the tag matches package.json and CHANGELOG.md
+        id: version
+        run: |
+          VERSION="${TAG#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$VERSION" != "$PKG" ]; then
+            echo "::error::Tag $TAG does not match package.json version $PKG"
+            exit 1
+          fi
+          if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for $VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run check
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:e2e
+
+  bundle:
+    name: Build release bundle
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: |
+          echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" npm run build
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          GIT_SHA: ${{ needs.verify.outputs.sha }}
+      - name: Package
+        run: |
+          npm prune --omit=dev --ignore-scripts
+          NAME="shiftnest-v${VERSION}"
+          mkdir -p "release/$NAME"
+          cp -r build node_modules server.js package.json package-lock.json README.md LICENSE CHANGELOG.md .env.example "release/$NAME/"
+          cat > "release/$NAME/BUILD_INFO.json" <<EOF
+          {
+            "version": "${VERSION}",
+            "build": "${{ github.run_number }}",
+            "commit": "${{ needs.verify.outputs.sha }}",
+            "date": "${BUILD_DATE}",
+            "node": ">=22.17"
+          }
+          EOF
+          tar -C release -czf "release/$NAME.tar.gz" "$NAME"
+          (cd release && zip -qr "$NAME.zip" "$NAME")
+          (cd release && sha256sum "$NAME.tar.gz" "$NAME.zip" > SHA256SUMS.txt)
+          cat release/SHA256SUMS.txt
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            release/shiftnest-v${{ env.VERSION }}.tar.gz
+            release/shiftnest-v${{ env.VERSION }}.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-bundle
+          path: |
+            release/*.tar.gz
+            release/*.zip
+            release/SHA256SUMS.txt
+          if-no-files-found: error
+
+  docker:
+    name: Publish Docker image
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - name: Image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.image.outputs.name }}
+          flavor: |
+            latest=${{ needs.verify.outputs.prerelease == 'false' }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ env.TAG }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.TAG }},enable=${{ needs.verify.outputs.prerelease == 'false' }}
+            type=semver,pattern={{major}},value=${{ env.TAG }},enable=${{ needs.verify.outputs.prerelease == 'false' }}
+            type=raw,value=build-${{ github.run_number }}
+          labels: |
+            org.opencontainers.image.title=Shiftnest
+            org.opencontainers.image.description=Clean, ad-free, self-hostable volunteer shift scheduler
+            org.opencontainers.image.licenses=MIT
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_NUMBER=${{ github.run_number }}
+            GIT_SHA=${{ needs.verify.outputs.sha }}
+            VERSION=${{ env.VERSION }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Attest image provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  publish:
+    name: Publish GitHub Release
+    needs: [verify, bundle, docker]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      IMAGE: ${{ needs.docker.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-bundle
+          path: release
+      - name: Write release notes
+        run: |
+          {
+            # The CHANGELOG section for this version, without its heading.
+            awk -v v="$VERSION" '
+              $0 ~ "^## \\[" v "\\]" { found = 1; next }
+              found && /^## \[/ { exit }
+              found { print }
+            ' CHANGELOG.md
+            echo
+            echo "## Install"
+            echo
+            echo '**Docker** (amd64 and arm64):'
+            echo
+            echo '```bash'
+            echo "docker run -d --name shiftnest -p 3000:3000 -v shiftnest-data:/data \\"
+            echo "  -e ORIGIN=http://localhost:3000 ${IMAGE}:${VERSION}"
+            echo '```'
+            echo
+            echo "**Node.js 22.17+**: download \`shiftnest-v${VERSION}.tar.gz\` below, extract it and run \`node server.js\` (dependencies are included)."
+            echo
+            echo "## Build"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Version | \`${VERSION}\` |"
+            echo "| Build number | \`${{ github.run_number }}\` |"
+            SHA="${{ needs.verify.outputs.sha }}"
+            echo "| Commit | \`${SHA::7}\` |"
+            echo "| Image | \`${IMAGE}:${VERSION}\` |"
+            echo "| Image digest | \`${{ needs.docker.outputs.digest }}\` |"
+            echo
+            echo "Checksums are in \`SHA256SUMS.txt\`. Release files and the image carry signed build provenance: \`gh attestation verify <file> --repo ${GITHUB_REPOSITORY}\`."
+          } > notes.md
+          cat notes.md
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FLAGS=()
+          if [ "${{ needs.verify.outputs.prerelease }}" = "true" ]; then FLAGS+=(--prerelease); else FLAGS+=(--latest); fi
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" --title "Shiftnest v${VERSION}" --notes-file notes.md "${FLAGS[@]}"
+            gh release upload "$TAG" release/* --clobber
+          else
+            gh release create "$TAG" release/* --verify-tag --title "Shiftnest v${VERSION}" --notes-file notes.md "${FLAGS[@]}"
+          fi

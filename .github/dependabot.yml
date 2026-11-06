@@ -1,0 +1,54 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: 'chore(deps)'
+    groups:
+      svelte:
+        patterns:
+          [
+            'svelte',
+            'svelte-check',
+            '@sveltejs/*',
+            'vite',
+            'prettier-plugin-svelte',
+            'eslint-plugin-svelte'
+          ]
+      lint:
+        patterns:
+          [
+            'eslint',
+            '@eslint/*',
+            'eslint-config-prettier',
+            'typescript-eslint',
+            'prettier',
+            'globals'
+          ]
+      test:
+        patterns: ['vitest', '@playwright/test']
+      types:
+        patterns: ['@types/*', 'typescript']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: 'ci'
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: 'build(docker)'

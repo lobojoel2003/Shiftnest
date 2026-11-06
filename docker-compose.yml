@@ -1,0 +1,26 @@
+# Run Shiftnest with Docker Compose:
+#
+#   docker compose up -d
+#
+# Then open http://localhost:3000 and create the first coordinator account.
+# Put your SMTP settings in a .env file next to this one (see .env.example).
+
+services:
+  shiftnest:
+    image: ghcr.io/lobojoel2003/shiftnest:latest
+    # To build from source instead: comment out `image` and uncomment `build`.
+    # build: .
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    volumes:
+      - shiftnest-data:/data
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ORIGIN: ${ORIGIN:-http://localhost:3000}
+      TZ: ${TZ:-UTC}
+
+volumes:
+  shiftnest-data:

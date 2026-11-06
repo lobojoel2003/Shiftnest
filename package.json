@@ -60,7 +60,7 @@
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
 		"@types/better-sqlite3": "^9.6.0",
 		"@types/mailparser": "^3.9.0",
-		"@types/node": "^22.19.19",
+		"@types/node": "^26.6.6",
 		"@types/nodemailer": "^8.0.2",
 		"@types/smtp-server": "^3.5.13",
 		"eslint": "^10.14.0",
@@ -73,7 +73,7 @@
 		"smtp-server": "^3.21.3",
 		"svelte": "^5.57.3",
 		"svelte-check": "^4.7.8",
-		"typescript": "^6.0.3",
+		"typescript": "^7.0.2",
 		"typescript-eslint": "^8.72.1",
 		"vite": "^8.3.6",
 		"vitest": "^5.1.0"

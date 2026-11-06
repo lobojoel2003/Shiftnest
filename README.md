@@ -253,12 +253,12 @@ The [release workflow](.github/workflows/release.yml) then checks that the tag, 
 
 ## CI/CD
 
-| Workflow                                 | When                        | What it does                                                                                                                                                                                                                  |
-| ---------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [CI](.github/workflows/ci.yml)           | Every push and pull request | Prettier + ESLint, `svelte-check`, unit tests on Node 22 and 24, Playwright end-to-end tests (desktop + mobile), production build smoke test, Docker build and container health check. On `main`, publishes the `edge` image. |
-| [Release](.github/workflows/release.yml) | Pushing a `vX.Y.Z` tag      | Verifies, builds the release bundle (`.tar.gz`, `.zip`, `SHA256SUMS.txt`), pushes `ghcr.io/lobojoel2003/shiftnest` for amd64 and arm64, attests provenance, publishes the GitHub Release.                                     |
-| [CodeQL](.github/workflows/codeql.yml)   | Pushes, PRs, weekly         | Static security analysis of the JavaScript and TypeScript code.                                                                                                                                                               |
-| [Dependabot](.github/dependabot.yml)     | Weekly                      | Grouped updates for npm packages, GitHub Actions and the Docker base image.                                                                                                                                                   |
+| Workflow                                 | When                              | What it does                                                                                                                                                                                                                  |
+| ---------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [CI](.github/workflows/ci.yml)           | Every push and pull request       | Prettier + ESLint, `svelte-check`, unit tests on Node 22 and 24, Playwright end-to-end tests (desktop + mobile), production build smoke test, Docker build and container health check. On `main`, publishes the `edge` image. |
+| [Release](.github/workflows/release.yml) | A `vX.Y.Z` tag, or “Run workflow” | Verifies, builds the release bundle (`.tar.gz`, `.zip`, `SHA256SUMS.txt`), pushes `ghcr.io/lobojoel2003/shiftnest` for amd64 and arm64, attests provenance, publishes the GitHub Release.                                     |
+| [CodeQL](.github/workflows/codeql.yml)   | Pushes, PRs, weekly               | Static security analysis of the JavaScript and TypeScript code.                                                                                                                                                               |
+| [Dependabot](.github/dependabot.yml)     | Weekly                            | Grouped updates for npm packages, GitHub Actions and the Docker base image.                                                                                                                                                   |
 
 ## Development
 

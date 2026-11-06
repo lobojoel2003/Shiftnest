@@ -48,7 +48,12 @@ export default defineConfig({
 			ORIGIN: `http://localhost:${PORT}`,
 			DATABASE_PATH: E2E_DB,
 			WORKER_INTERVAL_SECONDS: '5',
-			NODE_ENV: 'production'
+			NODE_ENV: 'production',
+			// A local SMTP server started by scripts/e2e-server.js.
+			SMTP_HOST: '127.0.0.1',
+			SMTP_PORT: '2525',
+			SMTP_SECURE: 'false',
+			MAIL_FROM: 'Shiftnest Tests <tests@example.org>'
 		}
 	}
 });

@@ -1,27 +1,46 @@
-import Database from 'better-sqlite3';
 import { expect, type Page } from '@playwright/test';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 export const ADMIN = {
 	name: 'Alex Rivera',
 	email: 'alex@example.org',
 	password: 'correct-horse-battery'
 };
-const DB_PATH = '.e2e-data/shiftnest.db';
 
-/** Read the newest queued message for a recipient straight from the database. */
-export function lastMessage(to: string, kind?: string): { subject: string; body_text: string } {
-	const db = new Database(DB_PATH, { readonly: true, fileMustExist: true });
-	try {
-		const row = db
-			.prepare(
-				`SELECT subject, body_text FROM outbox WHERE recipient = ? ${kind ? 'AND kind = ?' : ''} ORDER BY id DESC LIMIT 1`
-			)
-			.get(...(kind ? [to, kind] : [to])) as { subject: string; body_text: string } | undefined;
-		if (!row) throw new Error(`No message for ${to}`);
-		return row;
-	} finally {
-		db.close();
+/** Emails delivered to the test SMTP server started by scripts/e2e-server.js. */
+const MAIL_DIR = '.e2e-data/mail';
+
+interface Email {
+	to: string;
+	subject: string;
+	text: string;
+}
+
+function findEmail(to: string, subject?: RegExp): Email | undefined {
+	const files = readdirSync(MAIL_DIR).sort().reverse();
+	for (const file of files) {
+		const mail = JSON.parse(readFileSync(join(MAIL_DIR, file), 'utf8')) as Email;
+		if (
+			mail.to?.toLowerCase().includes(to.toLowerCase()) &&
+			(!subject || subject.test(mail.subject))
+		) {
+			return mail;
+		}
 	}
+	return undefined;
+}
+
+/** Wait for the newest email to `to` (optionally matching `subject`) to arrive. */
+export async function lastEmail(to: string, subject?: RegExp): Promise<Email> {
+	let found: Email | undefined;
+	await expect
+		.poll(() => (found = findEmail(to, subject)), {
+			message: `email to ${to}${subject ? ` matching ${subject}` : ''}`,
+			timeout: 10_000
+		})
+		.toBeTruthy();
+	return found!;
 }
 
 export function linkIn(text: string, path: string): string {

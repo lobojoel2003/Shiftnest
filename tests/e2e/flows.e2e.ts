@@ -1,5 +1,5 @@
 import { expect, test, type Browser } from '@playwright/test';
-import { ADMIN, expectToast, fillPerson, lastMessage, linkIn, signIn } from './helpers';
+import { ADMIN, expectToast, fillPerson, lastEmail, linkIn, signIn } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -24,7 +24,7 @@ async function signInVolunteer(browser: Browser, email: string) {
 	await page.getByLabel('Email address').fill(email);
 	await page.getByRole('button', { name: 'Email me my link' }).click();
 	await expect(page.getByText('Check your inbox')).toBeVisible();
-	const link = linkIn(lastMessage(email, 'portal_link').body_text, '/v/');
+	const link = linkIn((await lastEmail(email, /^Your shifts with/)).text, '/v/');
 	await page.goto(link);
 	await expect(page).toHaveURL(/\/my$/);
 	return page;
@@ -87,9 +87,9 @@ test('volunteer signs up with just a name and email', async ({ browser }) => {
 	await expect(page.getByRole('heading', { name: 'Hi, Maya!' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Sorting' })).toHaveCount(1);
 
-	const confirmation = lastMessage(MAYA.email, 'confirmation');
+	const confirmation = await lastEmail(MAYA.email, /^You’re signed up/);
 	expect(confirmation.subject).toContain('You’re signed up: Sorting');
-	expect(confirmation.body_text).toContain('/v/');
+	expect(confirmation.text).toContain('/v/');
 
 	// Personal calendar feed.
 	const feedUrl = await page.getByLabel('Calendar feed address').inputValue();
@@ -111,6 +111,18 @@ test('a full shift cannot be overbooked', async ({ browser }) => {
 	await ben.getByRole('button', { name: 'Confirm sign-up' }).click();
 	await expect(ben).toHaveURL(/\/my$/);
 
+	// Typing someone else's email doesn't reveal that they're on the shift:
+	// the answer looks like a normal sign-up and the real owner gets their link.
+	const stranger = await volunteerPage(browser);
+	const probe = await stranger.request.post('/events/saturday-pantry/1', {
+		form: { name: 'Someone Else', email: BEN.email },
+		headers: { origin: 'http://localhost:4173', accept: 'text/html' },
+		maxRedirects: 0
+	});
+	expect(probe.status()).toBe(303);
+	expect(probe.headers()['location']).toBe('/events/saturday-pantry');
+	await lastEmail(BEN.email, /^Your shifts with/);
+
 	const cy = await volunteerPage(browser);
 	await cy.goto('/events/saturday-pantry');
 	const first = cy.locator('li.shift').first();
@@ -123,7 +135,7 @@ test('a volunteer asks for cover and someone else takes the shift', async ({ bro
 	await maya.getByRole('button', { name: 'Find cover' }).click();
 	await expectToast(maya, 'needing cover');
 	const coverUrl = await maya.getByLabel(/Cover link for Sorting/).inputValue();
-	expect(lastMessage(MAYA.email, 'swap').subject).toContain('Looking for cover');
+	await lastEmail(MAYA.email, /^Looking for cover/);
 
 	// The shift now shows as needing cover on the public page.
 	const cy = await volunteerPage(browser);
@@ -137,7 +149,7 @@ test('a volunteer asks for cover and someone else takes the shift', async ({ bro
 	await expect(cy).toHaveURL(/\/my$/);
 	await expectToast(cy, 'we’ve let Maya P. know');
 
-	expect(lastMessage(MAYA.email, 'swap').subject).toContain('Covered! Cy Okafor');
+	await lastEmail(MAYA.email, /^Covered! Cy Okafor/);
 	await maya.reload();
 	await expect(maya.getByText('Nothing scheduled')).toBeVisible();
 
@@ -152,13 +164,13 @@ test('a volunteer switches to another week, then cancels', async ({ browser }) =
 	await cy.getByRole('radio').first().check();
 	await cy.getByRole('button', { name: 'Switch my shift' }).click();
 	await expectToast(cy, 'Switched!');
-	expect(lastMessage(CY.email).subject).toContain('Switched');
+	await lastEmail(CY.email, /^Switched/);
 
 	cy.once('dialog', (d) => d.accept());
 	await cy.getByRole('button', { name: 'Cancel' }).click();
 	await expectToast(cy, 'You’re off Sorting');
 	await expect(cy.getByText('Nothing scheduled')).toBeVisible();
-	expect(lastMessage(ADMIN.email, 'alert').subject).toContain('Cy Okafor cancelled');
+	await lastEmail(ADMIN.email, /^Cy Okafor cancelled/);
 });
 
 test('coordinator manages the roster and sees messages and hours', async ({ page }) => {
@@ -181,10 +193,17 @@ test('coordinator manages the roster and sees messages and hours', async ({ page
 	page.once('dialog', (d) => d.accept());
 	await page.getByRole('button', { name: 'Remove Dana Lee' }).click();
 	await expectToast(page, 'Dana Lee was removed');
-	expect(lastMessage('dana@example.com', 'removed').subject).toContain('no longer on Sorting');
+	await lastEmail('dana@example.com', /no longer on Sorting/);
 
 	await page.goto('/admin/messages');
 	await expect(page.getByRole('cell', { name: /maya@example.com/ }).first()).toBeVisible();
+	// Personal links are hidden from coordinators in the message log.
+	await page
+		.getByRole('link', { name: /^Your shifts with/ })
+		.first()
+		.click();
+	await expect(page.getByText('[private link hidden]')).toBeVisible();
+	await expect(page.locator('pre.body')).not.toContainText('/v/');
 
 	await page.goto('/admin/volunteers');
 	await expect(page.getByRole('link', { name: 'Maya Patel' })).toBeVisible();
@@ -206,6 +225,29 @@ test('private pages stay private', async ({ browser }) => {
 	expect([401, 403]).toContain(res.status());
 	const bad = await page.request.get('/ical/v/not-a-real-token.ics');
 	expect(bad.status()).toBe(404);
+
+	// Encoded or oddly written paths still reach the sign-in check.
+	for (const path of [
+		'/%61dmin/volunteers/export',
+		'/%61dmin/events/1/roster.csv',
+		'/%61%64%6d%69%6e/hours/export',
+		'/admin//volunteers/export',
+		'/%61dmin/messages/1/__data.json?x-sveltekit-invalidated=001'
+	]) {
+		const res = await page.request.get(path, { maxRedirects: 0 });
+		// Pages answer with a 303 to the sign-in page; data requests with a JSON redirect.
+		const redirected =
+			(res.status() === 303 && res.headers()['location']?.startsWith('/login')) ||
+			(await res.text()).startsWith('{"type":"redirect","status":303,"location":"/login');
+		expect(redirected, path).toBe(true);
+	}
+	const forged = await page.request.post('/%61dmin/settings?/save', {
+		form: { orgName: 'Hacked' },
+		headers: { origin: 'http://localhost:4173', accept: 'text/html' },
+		maxRedirects: 0
+	});
+	expect(forged.status()).not.toBe(200);
+	expect(forged.status()).not.toBe(303);
 });
 
 test('health check reports version and build', async ({ request }) => {

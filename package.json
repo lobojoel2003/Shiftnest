@@ -67,7 +67,7 @@
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.24.0",
 		"globals": "^17.6.0",
-		"mailparser": "^3.14.2",
+		"mailparser": "^3.14.3",
 		"prettier": "^3.9.10",
 		"prettier-plugin-svelte": "^4.1.1",
 		"smtp-server": "^3.21.3",

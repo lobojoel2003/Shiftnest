@@ -48,7 +48,7 @@
 		"ci": "npm run lint && npm run check && npm test && npm run build"
 	},
 	"dependencies": {
-		"better-sqlite3": "^13.0.3",
+		"better-sqlite3": "^13.2.0",
 		"nodemailer": "^10.3.1"
 	},
 	"devDependencies": {
